@@ -90,9 +90,39 @@ PARKING = {
 
 # 用户状态（内存存储）
 class UserState:
-    """用于 Demo 的用户状态管理"""
-    def __init__(self):
+    """用于 Demo 的用户状态管理（支持持久化存储）"""
+    def __init__(self, data_file="user_data.json"):
+        self.data_file = data_file
         self.users = {}
+        self.load()  # 启动时加载数据
+
+    def load(self):
+        """从JSON文件加载用户数据"""
+        import json
+        import os
+
+        if os.path.exists(self.data_file):
+            try:
+                with open(self.data_file, 'r', encoding='utf-8') as f:
+                    self.users = json.load(f)
+                print(f"✅ 已从 {self.data_file} 加载用户数据")
+            except Exception as e:
+                print(f"⚠️ 加载用户数据失败: {e}")
+                self.users = {}
+        else:
+            print(f"📝 {self.data_file} 不存在，将创建新的用户数据")
+            self.users = {}
+
+    def save(self):
+        """保存用户数据到JSON文件"""
+        import json
+
+        try:
+            with open(self.data_file, 'w', encoding='utf-8') as f:
+                json.dump(self.users, f, ensure_ascii=False, indent=2)
+            print(f"💾 用户数据已保存到 {self.data_file}")
+        except Exception as e:
+            print(f"⚠️ 保存用户数据失败: {e}")
 
     def get_user(self, user_id):
         """获取或创建用户"""
@@ -101,12 +131,14 @@ class UserState:
                 "points": 0,
                 "coupons": []
             }
+            self.save()  # 新建用户时保存
         return self.users[user_id]
 
     def add_points(self, user_id, amount):
         """增加积分"""
         user = self.get_user(user_id)
         user["points"] += amount
+        self.save()  # 积分变化时保存
         return user["points"]
 
     def deduct_points(self, user_id, amount):
@@ -114,6 +146,7 @@ class UserState:
         user = self.get_user(user_id)
         if user["points"] >= amount:
             user["points"] -= amount
+            self.save()  # 积分变化时保存
             return True
         return False
 
@@ -121,6 +154,7 @@ class UserState:
         """添加优惠券"""
         user = self.get_user(user_id)
         user["coupons"].append(coupon)
+        self.save()  # 优惠券变化时保存
 
     def get_points(self, user_id):
         """获取当前积分"""

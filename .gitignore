@@ -34,6 +34,9 @@ Desktop.ini
 # Logs
 *.log
 
+# User Data (persistent storage)
+user_data.json
+
 # Distribution / packaging
 dist/
 build/

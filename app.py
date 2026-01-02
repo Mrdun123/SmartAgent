@@ -7,6 +7,10 @@ import streamlit as st
 import os
 from datetime import datetime
 from typing import Optional
+from dotenv import load_dotenv
+
+# 加载.env文件中的环境变量
+load_dotenv()
 
 # 导入核心模块
 from agent_core import chat_with_concierge, get_user_points, get_user_coupons, reset_user_state
@@ -212,6 +216,12 @@ def init_session_state():
     if "first_load" not in st.session_state:
         st.session_state.first_load = True
 
+    if "points_version" not in st.session_state:
+        st.session_state.points_version = 0
+
+    if "pending_input" not in st.session_state:
+        st.session_state.pending_input = None
+
 
 # ==================== 侧边栏 ====================
 
@@ -226,23 +236,27 @@ def render_sidebar():
         user_id = st.session_state.user_id
         points = get_user_points(user_id)
         coupons = get_user_coupons(user_id)
-        
-        # 添加一个隐藏元素来监听更新
-        # 当last_update变化时，Streamlit会重新执行这个函数
-        if "last_update" in st.session_state:
-            _ = st.session_state.last_update
 
-        # 积分显示
+        # 积分显示 - 使用container确保实时更新
         st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
         st.markdown("#### 🏆 Loyalty Points")
-        
-        # 使用st.metric显示积分，并添加一个key使其可更新
-        st.metric(
-            label="Current Balance",
-            value=f"{points} pts",
-            delta=None,
-            key=f"points_metric_{user_id}_{st.session_state.get('last_update', '')}"
-        )
+
+        # 创建一个带唯一key的容器来确保更新
+        points_container = st.container()
+        with points_container:
+            # 使用points_version作为key的一部分，确保每次积分变化时都会重新渲染
+            st.markdown(f"""
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        padding: 1.5rem;
+                        border-radius: 1rem;
+                        color: white;
+                        text-align: center;
+                        margin: 0.5rem 0;">
+                <div style="font-size: 0.9rem; opacity: 0.9; margin-bottom: 0.3rem;">Current Balance</div>
+                <div style="font-size: 2rem; font-weight: 700;">{points}</div>
+                <div style="font-size: 0.85rem; opacity: 0.8;">points</div>
+            </div>
+            """, unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
         # 优惠券显示
@@ -361,7 +375,12 @@ def main():
     # 聊天输入框
     user_input = st.chat_input("Type your message here... (e.g., 'Where is Hermès?' or 'I'm bored!')")
 
-    # 处理用户输入
+    # 检查是否有待处理的输入（来自快捷按钮）
+    if st.session_state.pending_input:
+        user_input = st.session_state.pending_input
+        st.session_state.pending_input = None  # 清除待处理输入
+
+    # 处理用户输入（来自chat_input或快捷按钮）
     if user_input:
         # 检查 API Key
         if not st.session_state.api_key:
@@ -413,14 +432,14 @@ def main():
                                 "spot": spot_match.group()
                             }
 
-                # 更新last_update时间戳，确保侧边栏重新渲染
-                st.session_state.last_update = datetime.now().isoformat()
+                # 更新版本号，确保侧边栏重新渲染
+                st.session_state.points_version += 1
 
             except Exception as e:
                 st.error(f"❌ Error: {str(e)}")
                 st.info("💡 Tip: Make sure your API key is valid and you have internet connection.")
-                # 即使出错也更新last_update
-                st.session_state.last_update = datetime.now().isoformat()
+                # 即使出错也增加版本号
+                st.session_state.points_version += 1
         
         # 在try-except块外部调用rerun，确保总是执行
         st.rerun()
@@ -432,29 +451,17 @@ def main():
 
         with col1:
             if st.button("🏪 Find Hermès Store", use_container_width=True):
-                st.session_state.messages.append({
-                    "role": "user",
-                    "content": "Where is Hermès?",
-                    "timestamp": datetime.now().strftime("%H:%M")
-                })
+                st.session_state.pending_input = "Where is Hermès?"
                 st.rerun()
 
         with col2:
             if st.button("🚗 Find My Car (DXB-1234)", use_container_width=True):
-                st.session_state.messages.append({
-                    "role": "user",
-                    "content": "Where is my car? DXB-1234",
-                    "timestamp": datetime.now().strftime("%H:%M")
-                })
+                st.session_state.pending_input = "Where is my car? DXB-1234"
                 st.rerun()
 
         with col3:
             if st.button("🎮 I'm Bored!", use_container_width=True):
-                st.session_state.messages.append({
-                    "role": "user",
-                    "content": "I'm bored, entertain me!",
-                    "timestamp": datetime.now().strftime("%H:%M")
-                })
+                st.session_state.pending_input = "I'm bored, entertain me!"
                 st.rerun()
 
 

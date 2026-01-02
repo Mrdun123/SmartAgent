@@ -439,6 +439,7 @@ def reset_user_state(user_id: str = "demo_user"):
     """重置用户状态（用于测试）"""
     if user_id in USER_STATE.users:
         del USER_STATE.users[user_id]
+        USER_STATE.save()  # 保存重置后的状态
     print(f"✅ 用户 {user_id} 状态已重置")
 
 
