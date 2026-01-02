@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(chmod:*)",
+      "Bash(dir /B)",
+      "Bash(ls:*)",
+      "Bash(wc:*)",
+      "Bash(python -m venv:*)",
+      "Bash(source venv/Scripts/activate:*)",
+      "Bash(pip install:*)",
+      "Bash(pip uninstall:*)"
+    ]
+  }
+}

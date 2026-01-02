@@ -1,0 +1,10 @@
+# Dubai Mall Intelligent Concierge - Dependencies
+
+# Core AI Framework (DeepSeek API via OpenAI SDK)
+openai>=1.0.0
+
+# Web Framework
+streamlit>=1.39.0
+
+# Utilities
+python-dotenv>=1.0.0
