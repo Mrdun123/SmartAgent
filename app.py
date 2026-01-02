@@ -226,14 +226,22 @@ def render_sidebar():
         user_id = st.session_state.user_id
         points = get_user_points(user_id)
         coupons = get_user_coupons(user_id)
+        
+        # 添加一个隐藏元素来监听更新
+        # 当last_update变化时，Streamlit会重新执行这个函数
+        if "last_update" in st.session_state:
+            _ = st.session_state.last_update
 
         # 积分显示
         st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
         st.markdown("#### 🏆 Loyalty Points")
+        
+        # 使用st.metric显示积分，并添加一个key使其可更新
         st.metric(
             label="Current Balance",
             value=f"{points} pts",
-            delta=None
+            delta=None,
+            key=f"points_metric_{user_id}_{st.session_state.get('last_update', '')}"
         )
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -396,7 +404,7 @@ def main():
                     # 尝试从用户输入中提取车牌号
                     import re
                     plate_match = re.search(r'[A-Z]{2,3}-\d{4}', user_input.upper())
-                    if plate_match and "B1-" in response or "B2-" in response:
+                    if plate_match and ("B1-" in response or "B2-" in response):
                         plate = plate_match.group()
                         spot_match = re.search(r'B[12]-[A-Z]\d{2}', response)
                         if spot_match:
@@ -405,12 +413,32 @@ def main():
                                 "spot": spot_match.group()
                             }
 
+                # 检查响应中是否包含积分增加的关键词
+                # 这些关键词可能在Agent的回复中
+                points_keywords = ["points", "积分", "point", "pts", "积分增加", "获得积分", "奖励积分"]
+                points_added = any(keyword in response.lower() for keyword in points_keywords)
+                
+                # 检查响应中是否包含优惠券兑换的关键词
+                coupon_keywords = ["coupon", "优惠券", "voucher", "兑换", "redeem"]
+                coupon_redeemed = any(keyword in response.lower() for keyword in coupon_keywords)
+                
+                # 如果检测到积分增加或优惠券兑换，强制刷新侧边栏
+                if points_added or coupon_redeemed:
+                    # 强制更新session state中的时间戳，确保侧边栏重新渲染
+                    if "last_update" not in st.session_state:
+                        st.session_state.last_update = datetime.now().isoformat()
+                    else:
+                        st.session_state.last_update = datetime.now().isoformat()
+                
                 # 重新运行以刷新侧边栏（显示最新积分/优惠券）
+                # 总是调用rerun，确保侧边栏更新
                 st.rerun()
 
             except Exception as e:
                 st.error(f"❌ Error: {str(e)}")
                 st.info("💡 Tip: Make sure your API key is valid and you have internet connection.")
+                # 即使出错也尝试刷新侧边栏
+                st.rerun()
 
     # 快捷建议按钮（仅在空白时显示）
     if len(st.session_state.messages) == 0:
