@@ -222,6 +222,9 @@ def init_session_state():
     if "pending_input" not in st.session_state:
         st.session_state.pending_input = None
 
+    if "waiting_for_response" not in st.session_state:
+        st.session_state.waiting_for_response = False
+
 
 # ==================== 侧边栏 ====================
 
@@ -293,6 +296,7 @@ def render_sidebar():
             st.session_state.messages = []
             st.session_state.parking_info = None
             st.session_state.first_load = True
+            st.session_state.waiting_for_response = False
             st.rerun()
 
         # API Key 设置（折叠）
@@ -380,8 +384,8 @@ def main():
         user_input = st.session_state.pending_input
         st.session_state.pending_input = None  # 清除待处理输入
 
-    # 处理用户输入（来自chat_input或快捷按钮）
-    if user_input:
+    # 步骤1：处理新的用户输入（立即显示用户消息）
+    if user_input and not st.session_state.waiting_for_response:
         # 检查 API Key
         if not st.session_state.api_key:
             st.error("⚠️ Please set your DeepSeek API Key in the sidebar settings.")
@@ -397,51 +401,70 @@ def main():
             "timestamp": timestamp
         })
 
-        # 显示加载状态
-        with st.spinner("Concierge is thinking..."):
-            try:
-                # 调用 Agent 核心函数
-                response, updated_history = chat_with_concierge(
-                    user_input=user_input,
-                    chat_history=st.session_state.chat_history,
-                    user_id=st.session_state.user_id,
-                    api_key=st.session_state.api_key
-                )
+        # 设置等待响应状态
+        st.session_state.waiting_for_response = True
 
-                # 更新聊天历史
-                st.session_state.chat_history = updated_history
+        # 立即刷新界面，显示用户消息
+        st.rerun()
 
-                # 添加 Assistant 回复到显示列表
-                st.session_state.messages.append({
-                    "role": "assistant",
-                    "content": response,
-                    "timestamp": datetime.now().strftime("%H:%M")
-                })
+    # 步骤2：如果正在等待响应，调用AI API
+    if st.session_state.waiting_for_response:
+        # 获取最后一条用户消息
+        last_user_message = None
+        for msg in reversed(st.session_state.messages):
+            if msg["role"] == "user":
+                last_user_message = msg["content"]
+                break
 
-                # 检查是否查询了停车信息（解析响应中的停车位）
-                if "DXB-" in user_input or "parking" in user_input.lower():
-                    # 尝试从用户输入中提取车牌号
-                    import re
-                    plate_match = re.search(r'[A-Z]{2,3}-\d{4}', user_input.upper())
-                    if plate_match and ("B1-" in response or "B2-" in response):
-                        plate = plate_match.group()
-                        spot_match = re.search(r'B[12]-[A-Z]\d{2}', response)
-                        if spot_match:
-                            st.session_state.parking_info = {
-                                "plate": plate,
-                                "spot": spot_match.group()
-                            }
+        if last_user_message:
+            # 显示加载状态
+            with st.spinner("Concierge is thinking..."):
+                try:
+                    # 调用 Agent 核心函数
+                    response, updated_history = chat_with_concierge(
+                        user_input=last_user_message,
+                        chat_history=st.session_state.chat_history,
+                        user_id=st.session_state.user_id,
+                        api_key=st.session_state.api_key
+                    )
 
-                # 更新版本号，确保侧边栏重新渲染
-                st.session_state.points_version += 1
+                    # 更新聊天历史
+                    st.session_state.chat_history = updated_history
 
-            except Exception as e:
-                st.error(f"❌ Error: {str(e)}")
-                st.info("💡 Tip: Make sure your API key is valid and you have internet connection.")
-                # 即使出错也增加版本号
-                st.session_state.points_version += 1
-        
-        # 在try-except块外部调用rerun，确保总是执行
+                    # 添加 Assistant 回复到显示列表
+                    st.session_state.messages.append({
+                        "role": "assistant",
+                        "content": response,
+                        "timestamp": datetime.now().strftime("%H:%M")
+                    })
+
+                    # 检查是否查询了停车信息（解析响应中的停车位）
+                    if "DXB-" in last_user_message or "parking" in last_user_message.lower():
+                        # 尝试从用户输入中提取车牌号
+                        import re
+                        plate_match = re.search(r'[A-Z]{2,3}-\d{4}', last_user_message.upper())
+                        if plate_match and ("B1-" in response or "B2-" in response):
+                            plate = plate_match.group()
+                            spot_match = re.search(r'B[12]-[A-Z]\d{2}', response)
+                            if spot_match:
+                                st.session_state.parking_info = {
+                                    "plate": plate,
+                                    "spot": spot_match.group()
+                                }
+
+                    # 更新版本号，确保侧边栏重新渲染
+                    st.session_state.points_version += 1
+
+                except Exception as e:
+                    st.error(f"❌ Error: {str(e)}")
+                    st.info("💡 Tip: Make sure your API key is valid and you have internet connection.")
+                    # 即使出错也增加版本号
+                    st.session_state.points_version += 1
+
+        # 清除等待状态
+        st.session_state.waiting_for_response = False
+
+        # 刷新界面，显示AI回复
         st.rerun()
 
     # 快捷建议按钮（仅在空白时显示）
